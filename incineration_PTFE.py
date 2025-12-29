@@ -57,7 +57,7 @@ mercury_to_air_LCA = np.reshape(LCA_assumptions.loc['mercury_to_air',:].iloc[2:]
 CO2_fossil_to_air_LCA = np.reshape(LCA_assumptions.loc['CO2_fossil_to_air',:].iloc[2:].to_numpy(dtype=float), (1,-1))
 C2F6_to_air_LCA = np.reshape(LCA_assumptions.loc['C2F6_to_air',:].iloc[2:].to_numpy(dtype=float), (1,-1))
 CF4_to_air_LCA = np.reshape(LCA_assumptions.loc['CF4_to_air',:].iloc[2:].to_numpy(dtype=float), (1,-1))
-fuel_LCA = np.reshape(LCA_assumptions.loc['propane_to_air',:].iloc[2:].to_numpy(dtype=float), (1,-1))
+fuel_LCA = np.reshape(LCA_assumptions.loc['methane_to_air',:].iloc[2:].to_numpy(dtype=float), (1,-1))
 
 #transport
 tansport_emissions_factor_truck, correlation_distributions, correlation_parameters = lhs.lhs_distribution(design_assumptions.loc['tansport_emissions_factor_truck'], correlation_distributions, correlation_parameters, n_samples)
@@ -94,6 +94,10 @@ pollution_control_factor,correlation_distributions, correlation_parameters = lhs
 
 
 ash_incin, correlation_distributions, correlation_parameters = lhs.lhs_distribution(design_assumptions.loc['ash_incin'], correlation_distributions, correlation_parameters, n_samples)
+
+
+T_ambient, correlation_distributions, correlation_parameters = lhs.lhs_distribution(design_assumptions.loc['T_ambient'], correlation_distributions, correlation_parameters, n_samples)
+T_base, correlation_distributions, correlation_parameters = lhs.lhs_distribution(design_assumptions.loc['T_base'], correlation_distributions, correlation_parameters, n_samples)
 
 electricity_use_incin, correlation_distributions, correlation_parameters = lhs.lhs_distribution(design_assumptions.loc['electricity_use_incin'], correlation_distributions, correlation_parameters, n_samples)
 electricity_cost, correlation_distributions, correlation_parameters = lhs.lhs_distribution(design_assumptions.loc['electricity_cost'], correlation_distributions, correlation_parameters, n_samples)
@@ -153,11 +157,24 @@ incineration_construction_cost = (3E+06 * (solids_volume_disposal_incineration *
 incin_maintenance = (6523.9 * (solids_volume_disposal_incineration* normalize_factor) + 16047)  /normalize_factor  # $/yr
 incin_material = (15360 + (solids_volume_disposal_incineration * normalize_factor)**0.2703)  /normalize_factor  # $/yr
 
+
+
+# Target Temperature (e.g., 500 or 1050)
+T_target = 1050 
+
+# 1. Calculate Temperature Scaling Factors
+# Fuel scales with Delta T (heat required)
+fuel_scaling_factor = (T_target - T_ambient) / (T_base - T_ambient)
+
+# Electricity scales with Absolute Temp (Kelvin) for fan/motor load 
+elec_scaling_factor = (T_target + 273.15) / (T_base + 273.15)
 number_of_incinerators = np.ceil ((total_mass_input_waste *1000) / (burn_rate * operation_time)) # number
-fuel_demand = fuel_consumption * operation_time * 365 * number_of_incinerators * 0.264 # gallon/yr #propane
+
+fuel_demand_l_hr = fuel_consumption * fuel_scaling_factor
+fuel_demand = fuel_demand_l_hr * operation_time * 365 * number_of_incinerators * 0.264 # gallon/yr #propane
 fuel_cost_annual = fuel_demand * fuel_price # $/yr
 
-incin_energy_cost = solids_mass_disposal_incineration * electricity_use_incin * electricity_cost * 365 # $/yr
+incin_energy_cost = solids_mass_disposal_incineration * electricity_use_incin * elec_scaling_factor * electricity_cost * 365 # $/yr
 incin_capital_cost_annualized = incineration_construction_cost * ((discount_rate * (1+discount_rate)**analysis_period)
                                       / ((1+discount_rate)**analysis_period - 1))
 
@@ -303,6 +320,6 @@ with pd.ExcelWriter("incin_PTFE.xlsx") as writer:
     df_total_impacts_energy.to_excel(writer, sheet_name="energy_impacts", index=False)
     df_total_impacts_direct_emissions_from_waste.to_excel(writer, sheet_name="direct_emissions_impacts", index=False)
     df_cost.to_excel(writer, sheet_name="cost", index=False)
-    df_impacts.to_excel(writer, sheet_name="impacts", index=False)
-    sensitivity.to_excel(writer, sheet_name="sensitivity")
+    df_impacts.to_excel(writer, sheet_name="impacts_PTFE", index=False)
+    sensitivity.to_excel(writer, sheet_name="sensitivity_PTFE")
     dfinputs.to_excel(writer, sheet_name='inputs')

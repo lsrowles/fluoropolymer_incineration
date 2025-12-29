@@ -44,7 +44,7 @@ PM_to_air_LCA           = np.reshape(LCA_assumptions.loc['PM_to_air', :].iloc[2:
 NOx_to_air_LCA          = np.reshape(LCA_assumptions.loc['NOx_to_air', :].iloc[2:].to_numpy(dtype=float), (1, -1))
 HF_to_air_LCA           = np.reshape(LCA_assumptions.loc['HF_to_air', :].iloc[2:].to_numpy(dtype=float), (1, -1))
 CO2_fossil_to_air_LCA   = np.reshape(LCA_assumptions.loc['CO2_fossil_to_air', :].iloc[2:].to_numpy(dtype=float), (1, -1))
-fuel_LCA                = np.reshape(LCA_assumptions.loc['propane_to_air', :].iloc[2:].to_numpy(dtype=float), (1, -1))
+fuel_LCA = np.reshape(LCA_assumptions.loc['methane_to_air',:].iloc[2:].to_numpy(dtype=float), (1,-1))
 
 # design inputs needed for PVDF block
 diesel_transport, correlation_distributions, correlation_parameters = lhs.lhs_distribution(design_assumptions.loc['diesel_transport'], correlation_distributions, correlation_parameters, n_samples)
@@ -79,6 +79,10 @@ HF_to_air_incin_PVDF, correlation_distributions, correlation_parameters = lhs.lh
 pollution_control_factor, correlation_distributions, correlation_parameters = lhs.lhs_distribution(design_assumptions.loc['pollution_control_factor'], correlation_distributions, correlation_parameters, n_samples)
 
 ash_incin, correlation_distributions, correlation_parameters = lhs.lhs_distribution(design_assumptions.loc['ash_incin'], correlation_distributions, correlation_parameters, n_samples)
+
+
+T_ambient, correlation_distributions, correlation_parameters = lhs.lhs_distribution(design_assumptions.loc['T_ambient'], correlation_distributions, correlation_parameters, n_samples)
+T_base, correlation_distributions, correlation_parameters = lhs.lhs_distribution(design_assumptions.loc['T_base'], correlation_distributions, correlation_parameters, n_samples)
 
 electricity_use_incin, correlation_distributions, correlation_parameters = lhs.lhs_distribution(design_assumptions.loc['electricity_use_incin'], correlation_distributions, correlation_parameters, n_samples)
 electricity_cost, correlation_distributions, correlation_parameters = lhs.lhs_distribution(design_assumptions.loc['electricity_cost'], correlation_distributions, correlation_parameters, n_samples)
@@ -139,8 +143,19 @@ incineration_construction_cost_PVDF = (3e6 * (solids_volume_disposal_incineratio
 incin_maintenance_PVDF = (6523.9 * (solids_volume_disposal_incineration_PVDF * normalize_factor) + 16047) / normalize_factor
 incin_material_PVDF = (15360 + (solids_volume_disposal_incineration_PVDF * normalize_factor) ** 0.2703) / normalize_factor
 
+# Target Temperature (e.g., 500 or 1050)
+T_target = 500 
+
+# 1. Calculate Temperature Scaling Factors
+# Fuel scales with Delta T (heat required)
+fuel_scaling_factor = (T_target - T_ambient) / (T_base - T_ambient)
+
+# Electricity scales with Absolute Temp (Kelvin) for fan/motor load 
+elec_scaling_factor = (T_target + 273.15) / (T_base + 273.15)
 number_of_incinerators = np.ceil((total_mass_input_waste * 1000) / (burn_rate * operation_time))
-fuel_demand = fuel_consumption * operation_time * 365 * number_of_incinerators * 0.264
+
+fuel_demand_l_hr = fuel_consumption * fuel_scaling_factor
+fuel_demand = fuel_demand_l_hr * operation_time * 365 * number_of_incinerators * 0.264 # gallon/yr #propane
 fuel_cost_annual = fuel_demand * fuel_price
 
 incin_energy_cost_PVDF = solids_mass_disposal_incineration * electricity_use_incin * electricity_cost * 365
@@ -234,7 +249,7 @@ sensitivity_PVDF = pd.DataFrame({
 })
 
 # write outputs
-with pd.ExcelWriter("trial_PVDF.xlsx") as writer:
+with pd.ExcelWriter("incin_PVDF.xlsx") as writer:
     df_results_PVDF.to_excel(writer, sheet_name="results", index=False)
 
     df_total_impacts_capital.to_excel(writer, sheet_name="capital_impacts", index=False)
